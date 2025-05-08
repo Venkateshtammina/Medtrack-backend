@@ -1,5 +1,6 @@
-require("dotenv").config();
 const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+dotenv.config();
 const nodemailer = require("nodemailer");
 const User = require("../models/User");
 const Medicine = require("../models/Medicine");
@@ -85,4 +86,4 @@ async function sendExpiryEmails() {
   }
 }
 
-module.exports = sendExpiryEmails;
+sendExpiryEmails();

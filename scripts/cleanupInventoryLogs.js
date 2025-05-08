@@ -15,4 +15,4 @@ async function cleanupLogs() {
   }
 }
 
-cleanupLogs(); 
+cleanupLogs();
