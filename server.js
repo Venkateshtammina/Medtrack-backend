@@ -22,6 +22,19 @@ app.use("/api/auth", authRoutes);
 app.use("/api/medicines", medicineRoutes);
 app.use("/api/inventory-logs", inventoryLogRoutes);
 
+// Root route
+app.get("/", (req, res) => {
+  res.json({
+    message: "MedTrack API is running",
+    version: "1.0.0",
+    endpoints: {
+      auth: "/api/auth",
+      medicines: "/api/medicines",
+      inventory: "/api/inventory-logs"
+    }
+  });
+});
+
 // REMOVE or COMMENT OUT the following lines for backend-only deployment on Render
 // app.use(express.static(path.join(__dirname, "../frontend/build")));
 // app.get("*", (req, res) => {
