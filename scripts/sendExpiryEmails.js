@@ -65,6 +65,10 @@ async function sendExpiryEmails() {
         med.lastAlertSent = today;
         await med.save();
         console.log(`✔️ Expired alert sent to ${user.email} for medicine: ${med.name}`);
+
+        // Delete the medicine from inventory after alerting
+        await Medicine.deleteOne({ _id: med._id });
+        console.log(`🗑️ Deleted expired medicine: ${med.name} for user: ${user.email}`);
       }
 
       // 2. Expiring Soon (within next 7 days, but not today or in the past)
