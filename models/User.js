@@ -5,6 +5,8 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: String,
   lastAlertSent: { type: Date, default: null }, // 🆕 Added field
+  resetOtp: { type: String },
+  resetOtpExpiry: { type: Date }
 });
 
 module.exports = mongoose.model("User", userSchema);

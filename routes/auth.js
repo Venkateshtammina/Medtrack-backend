@@ -108,7 +108,28 @@ router.post("/reset-password-with-otp", async (req, res) => {
   try {
     const trimmedEmail = email.toLowerCase().trim();
     const user = await User.findOne({ email: trimmedEmail });
-    if (!user || user.resetOtp !== otp || Date.now() > user.resetOtpExpiry) {
+    
+    // Debug logging
+    console.log('Reset attempt:', {
+      email: trimmedEmail,
+      providedOtp: otp,
+      storedOtp: user?.resetOtp,
+      expiry: user?.resetOtpExpiry,
+      currentTime: Date.now()
+    });
+
+    if (!user) {
+      console.log('User not found');
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+    
+    if (user.resetOtp !== otp) {
+      console.log('OTP mismatch');
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+    
+    if (Date.now() > user.resetOtpExpiry) {
+      console.log('OTP expired');
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
