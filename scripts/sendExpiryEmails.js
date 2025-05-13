@@ -29,58 +29,95 @@ async function sendExpiryEmails() {
   try {
     const users = await User.find();
     const today = new Date();
-    const next7Days = new Date();
-    next7Days.setDate(today.getDate() + 7);
+    today.setHours(0, 0, 0, 0); // Start of today
+    const next7Days = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     for (const user of users) {
-      // Find expiring medicines for this user that have not been alerted today
-      const expiringMeds = await Medicine.find({
+      // 1. Expired Today
+      const expiredTodayMeds = await Medicine.find({
         user: user._id,
-        expiryDate: { $lte: next7Days, $gte: today },
+        expiryDate: {
+          $gte: today,
+          $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        },
       });
 
-      // Filter out medicines that have already been alerted today
-      const medsToAlert = expiringMeds.filter(
+      for (const med of expiredTodayMeds) {
+        if (med.lastAlertSent && isSameDay(new Date(med.lastAlertSent), today)) {
+          continue; // Already alerted today
+        }
+
+        await transporter.sendMail({
+          from: `MedTrack Alerts <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: `Medicine Expiry Alert: ${med.name}`,
+          html: `
+            <h2>⏰ Medicine Expired</h2>
+            <p>Hi ${user.name},</p>
+            <p>Your medicine <strong>${med.name}</strong> expired today (${new Date(
+            med.expiryDate
+          ).toDateString()}).</p>
+            <p>Please take necessary action.</p>
+            <p>Regards,<br/>MedTrack</p>
+          `,
+        });
+
+        med.lastAlertSent = today;
+        await med.save();
+        console.log(`✔️ Expired alert sent to ${user.email} for medicine: ${med.name}`);
+      }
+
+      // 2. Expiring Soon (within next 7 days, but not today or in the past)
+      const expiringSoonMeds = await Medicine.find({
+        user: user._id,
+        expiryDate: {
+          $gt: today,
+          $lte: next7Days,
+        },
+      });
+
+      // Only alert for those not already alerted today
+      const medsToAlert = expiringSoonMeds.filter(
         (med) => !med.lastAlertSent || !isSameDay(new Date(med.lastAlertSent), today)
       );
 
-      if (medsToAlert.length === 0) continue;
+      if (medsToAlert.length > 0) {
+        const html = `
+          <h2>⏰ Medicines Expiring Soon</h2>
+          <p>Hi ${user.name},</p>
+          <p>The following medicines in your inventory are expiring within the next 7 days:</p>
+          <ul>
+            ${medsToAlert
+              .map(
+                (med) =>
+                  `<li><strong>${med.name}</strong> - Expires on ${new Date(
+                    med.expiryDate
+                  ).toDateString()}</li>`
+              )
+              .join("")}
+          </ul>
+          <p>Please take necessary action.</p>
+          <p>Regards,<br/>MedTrack</p>
+        `;
 
-      const html = `
-        <h2>⏰ Medicines Expiring Soon</h2>
-        <p>Hi ${user.name},</p>
-        <p>The following medicines in your inventory are expiring within the next 7 days:</p>
-        <ul>
-          ${medsToAlert
-            .map(
-              (med) =>
-                `<li><strong>${med.name}</strong> - Expires on ${new Date(
-                  med.expiryDate
-                ).toDateString()}</li>`
-            )
-            .join("")}
-        </ul>
-        <p>Please take necessary action.</p>
-        <p>Regards,<br/>MedTrack</p>
-      `;
+        await transporter.sendMail({
+          from: `MedTrack Alerts <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: "🚨 Medicine Expiry Alert",
+          html,
+        });
 
-      await transporter.sendMail({
-        from: `MedTrack Alerts <${process.env.EMAIL_USER}>`,
-        to: user.email,
-        subject: "🚨 Medicine Expiry Alert",
-        html,
-      });
+        // Update lastAlertSent for these medicines
+        for (const med of medsToAlert) {
+          med.lastAlertSent = today;
+          await med.save();
+        }
 
-      // Update lastAlertSent for these medicines
-      for (const med of medsToAlert) {
-        med.lastAlertSent = today;
-        await med.save();
+        console.log(`✔️ Soon-to-expire alert sent to ${user.email} for ${medsToAlert.length} medicines.`);
       }
-
-      console.log(`✔️ Alert sent to ${user.email} for ${medsToAlert.length} medicines.`);
     }
 
-    console.log("✅ All alerts processed.");
+    console.log("✅ All expiry alerts processed.");
   } catch (error) {
     console.error("❌ Error sending alerts:", error);
   }
