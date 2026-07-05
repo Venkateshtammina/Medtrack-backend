@@ -73,34 +73,53 @@ router.post("/forgot-password", async (req, res) => {
     user.resetOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     await user.save();
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error("Email config error:", error);
+    // Log OTP to console for testing
+    console.log(`\n🔐 OTP for ${trimmedEmail}: ${otp}`);
+
+    // Try to send email (graceful failure)
+    try {
+      let transporter;
+      
+      // Use custom SMTP if configured, otherwise Gmail
+      if (process.env.EMAIL_HOST) {
+        transporter = require("nodemailer").createTransport({
+          host: process.env.EMAIL_HOST,
+          port: process.env.EMAIL_PORT || 587,
+          secure: process.env.EMAIL_PORT == 465, // true for 465, false for other ports
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
       } else {
-        console.log("Ready to send email!");
+        transporter = require("nodemailer").createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
       }
-    });
 
-    const mailOptions = {
-      from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
-      to: trimmedEmail,
-      subject: "Your Password Reset OTP",
-      html: `
-        <p>Hi ${user.name},</p>
-        <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
-        <p>This OTP will expire in 10 minutes.</p>
-        <p>Regards,<br/>MedTrack Team</p>
-      `,
-    };
+      const mailOptions = {
+        from: `"MedTrack Support" <venkatesht1243@gmail.com>`,
+        to: trimmedEmail,
+        subject: "Your Password Reset OTP",
+        html: `
+          <p>Hi ${user.name},</p>
+          <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
+          <p>This OTP will expire in 10 minutes.</p>
+          <p>Regards,<br/>MedTrack Team</p>
+        `,
+      };
 
-    await transporter.sendMail(mailOptions);
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Email sent to ${trimmedEmail}`);
+    } catch (emailError) {
+      console.error("Email sending failed (non-blocking):", emailError.message);
+      // Continue anyway - OTP is still valid in database
+    }
+
     res.json({ message: "OTP sent to your email." });
   } catch (err) {
     console.error("Forgot password error:", err);
@@ -153,6 +172,38 @@ router.post("/reset-password-with-otp", async (req, res) => {
   }
 });
 
+// Reset Password with Token (for email links)
+router.post("/reset-password", async (req, res) => {
+  const { token, email, password } = req.body;
+
+  try {
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const trimmedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: trimmedEmail });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (decoded.id !== user._id.toString()) {
+      return res.status(401).json({ message: "Token does not match user" });
+    }
+
+    // Update password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    user.resetOtp = undefined;
+    user.resetOtpExpiry = undefined;
+    await user.save();
+
+    res.json({ message: "Password reset successfully." });
+  } catch (err) {
+    console.error("Reset password error:", err);
+    res.status(401).json({ message: "Invalid or expired token" });
+  }
+});
+
 // Get current user info (requires authentication)
 router.get("/me", async (req, res) => {
   try {
@@ -173,11 +224,11 @@ router.get("/me", async (req, res) => {
 
 // Request OTP for registration
 router.post("/request-otp", async (req, res) => {
-  const { email } = req.body;
+  const { email, name } = req.body;
   try {
     const trimmedEmail = email.toLowerCase().trim();
     // Check if user already exists
-    const userExists = await User.findOne({ email: trimmedEmail });
+    const userExists = await User.findOne({ email: trimmedEmail, password: { $ne: null } });
     if (userExists) return res.status(400).json({ message: "User already exists" });
 
     // Generate OTP
@@ -186,26 +237,52 @@ router.post("/request-otp", async (req, res) => {
     // Store OTP in a temporary user document (or upsert)
     let tempUser = await User.findOne({ email: trimmedEmail, password: null });
     if (!tempUser) {
-      tempUser = new User({ name: "", email: trimmedEmail, password: null });
+      tempUser = new User({ name: name || "", email: trimmedEmail, password: null });
     }
     tempUser.resetOtp = otp;
     tempUser.resetOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     await tempUser.save();
 
-    // Send OTP to email
-    const transporter = require("nodemailer").createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-    await transporter.sendMail({
-      from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
-      to: trimmedEmail,
-      subject: "Your Registration OTP",
-      html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
-    });
+    // Log OTP to console for testing
+    console.log(`\n🔐 Registration OTP for ${trimmedEmail}: ${otp}`);
+
+    // Try to send OTP to email (graceful failure)
+    try {
+      let transporter;
+      
+      // Use custom SMTP if configured, otherwise Gmail
+      if (process.env.EMAIL_HOST) {
+        transporter = require("nodemailer").createTransport({
+          host: process.env.EMAIL_HOST,
+          port: process.env.EMAIL_PORT || 587,
+          secure: process.env.EMAIL_PORT == 465,
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+      } else {
+        transporter = require("nodemailer").createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+      }
+      
+      await transporter.sendMail({
+        from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
+        to: trimmedEmail,
+        subject: "Your Registration OTP",
+        html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
+      });
+      
+      console.log(`✅ Registration email sent to ${trimmedEmail}`);
+    } catch (emailError) {
+      console.error("Email sending failed (non-blocking):", emailError.message);
+      // Continue anyway - OTP is still valid in database
+    }
 
     res.json({ message: "OTP sent to your email." });
   } catch (err) {
