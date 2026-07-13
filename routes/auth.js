@@ -85,7 +85,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Forgot Password - Send OTP via Gmail SMTP
+// Forgot Password - Send OTP via Gmail SMTP (Awaited for Serverless)
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
 
@@ -103,34 +103,26 @@ router.post("/forgot-password", async (req, res) => {
     // Log OTP to console for testing
     console.log(`\n🔐 OTP for ${trimmedEmail}: ${otp}`);
 
-    // Non-blocking, fire-and-forget email sending
-    const sendEmailAsync = async () => {
-      try {
-        const mailOptions = {
-          from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
-          to: trimmedEmail,
-          subject: "Your Password Reset OTP",
-          html: `
-            <p>Hi ${user.name},</p>
-            <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
-            <p>This OTP will expire in 10 minutes.</p>
-            <p>Regards,<br/>MedTrack Team</p>
-          `,
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Email sent via Gmail SMTP to ${trimmedEmail}`);
-      } catch (emailError) {
-        console.error("❌ Email sending failed:", emailError.message);
-      }
+    const mailOptions = {
+      from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
+      to: trimmedEmail,
+      subject: "Your Password Reset OTP",
+      html: `
+        <p>Hi ${user.name},</p>
+        <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
+        <p>This OTP will expire in 10 minutes.</p>
+        <p>Regards,<br/>MedTrack Team</p>
+      `,
     };
 
-    sendEmailAsync();
+    // Await execution synchronously to keep Vercel lambda execution active
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Email sent via Gmail SMTP to ${trimmedEmail}`);
 
-    res.json({ message: "OTP sent to your email." });
+    return res.json({ message: "OTP sent to your email." });
   } catch (err) {
     console.error("Forgot password error:", err);
-    res.status(500).json({ message: "Something went wrong." });
+    return res.status(500).json({ message: "Failed to send email OTP." });
   }
 });
 
@@ -227,7 +219,7 @@ router.get("/me", async (req, res) => {
   }
 });
 
-// Request OTP for registration via Gmail SMTP
+// Request OTP for registration via Gmail SMTP (Awaited for Serverless)
 router.post("/request-otp", async (req, res) => {
   const { email, name } = req.body;
   try {
@@ -253,29 +245,21 @@ router.post("/request-otp", async (req, res) => {
     // Log OTP to console for testing
     console.log(`\n🔐 Registration OTP for ${trimmedEmail}: ${otp}`);
 
-    // Non-blocking, fire-and-forget email sending
-    const sendEmailAsync = async () => {
-      try {
-        const mailOptions = {
-          from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
-          to: trimmedEmail,
-          subject: "Your Registration OTP",
-          html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Registration email sent via Gmail SMTP to ${trimmedEmail}`);
-      } catch (emailError) {
-        console.error("❌ Email sending failed:", emailError.message);
-      }
+    const mailOptions = {
+      from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
+      to: trimmedEmail,
+      subject: "Your Registration OTP",
+      html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
     };
 
-    sendEmailAsync();
+    // Await execution synchronously to keep Vercel lambda execution active
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Registration email sent via Gmail SMTP to ${trimmedEmail}`);
 
-    res.json({ message: "OTP sent to your email." });
+    return res.json({ message: "OTP sent to your email." });
   } catch (err) {
     console.error("Request OTP error:", err);
-    res.status(500).json({ message: "Failed to send OTP." });
+    return res.status(500).json({ message: "Failed to send registration OTP." });
   }
 });
 
