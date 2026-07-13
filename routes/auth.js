@@ -273,6 +273,10 @@ router.post("/request-otp", async (req, res) => {
     // Try to send OTP to email (non-blocking, fire-and-forget)
     const sendEmailAsync = async () => {
       try {
+        console.log("📧 Starting email send process...");
+        console.log("EMAIL_USER:", process.env.EMAIL_USER ? "configured" : "NOT CONFIGURED");
+        console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "configured" : "NOT CONFIGURED");
+
         let transporter;
         
         // Use custom SMTP if configured, otherwise Gmail
@@ -307,7 +311,8 @@ router.post("/request-otp", async (req, res) => {
         
         console.log(`✅ Registration email sent to ${trimmedEmail}`);
       } catch (emailError) {
-        console.error("Email sending failed (non-blocking):", emailError.message);
+        console.error("❌ Email sending failed:", emailError.message);
+        console.error("Full error:", emailError);
       }
     };
 
