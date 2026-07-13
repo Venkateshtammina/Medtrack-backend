@@ -95,47 +95,68 @@ router.post("/forgot-password", async (req, res) => {
     // Try to send email (non-blocking, fire-and-forget)
     const sendEmailAsync = async () => {
       try {
-        let transporter;
-        
-        // Use custom SMTP if configured, otherwise Gmail
-        if (process.env.EMAIL_HOST) {
-          transporter = require("nodemailer").createTransport({
-            host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT || 587,
-            secure: process.env.EMAIL_PORT == 465,
-            auth: {
-              user: process.env.EMAIL_USER,
-              pass: process.env.EMAIL_PASS,
-            },
+        // Use Resend API if configured (works on Render without SMTP blocking)
+        if (process.env.RESEND_API_KEY) {
+          console.log("📧 Using Resend API for email sending");
+          const resend = require('resend');
+          const resendClient = new resend.Resend(process.env.RESEND_API_KEY);
+
+          await resendClient.emails.send({
+            from: 'MedTrack <onboarding@resend.dev>',
+            to: trimmedEmail,
+            subject: 'Your Password Reset OTP',
+            html: `
+              <p>Hi ${user.name},</p>
+              <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
+              <p>This OTP will expire in 10 minutes.</p>
+              <p>Regards,<br/>MedTrack Team</p>
+            `
           });
+          console.log(`✅ Email sent via Resend to ${trimmedEmail}`);
         } else {
-          transporter = require("nodemailer").createTransport({
-            host: "smtp.gmail.com",
-            port: 587,
-            secure: false,
-            auth: {
-              user: process.env.EMAIL_USER,
-              pass: process.env.EMAIL_PASS,
-            },
-          });
+          // Fallback to SMTP (for local development)
+          console.log("📧 Using SMTP for email sending");
+          let transporter;
+
+          if (process.env.EMAIL_HOST) {
+            transporter = require("nodemailer").createTransport({
+              host: process.env.EMAIL_HOST,
+              port: process.env.EMAIL_PORT || 587,
+              secure: process.env.EMAIL_PORT == 465,
+              auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+              },
+            });
+          } else {
+            transporter = require("nodemailer").createTransport({
+              host: "smtp.gmail.com",
+              port: 587,
+              secure: false,
+              auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+              },
+            });
+          }
+
+          const mailOptions = {
+            from: `"MedTrack Support" <venkatesht1243@gmail.com>`,
+            to: trimmedEmail,
+            subject: "Your Password Reset OTP",
+            html: `
+              <p>Hi ${user.name},</p>
+              <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
+              <p>This OTP will expire in 10 minutes.</p>
+              <p>Regards,<br/>MedTrack Team</p>
+            `,
+          };
+
+          await transporter.sendMail(mailOptions);
+          console.log(`✅ Email sent via SMTP to ${trimmedEmail}`);
         }
-
-        const mailOptions = {
-          from: `"MedTrack Support" <venkatesht1243@gmail.com>`,
-          to: trimmedEmail,
-          subject: "Your Password Reset OTP",
-          html: `
-            <p>Hi ${user.name},</p>
-            <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
-            <p>This OTP will expire in 10 minutes.</p>
-            <p>Regards,<br/>MedTrack Team</p>
-          `,
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Email sent to ${trimmedEmail}`);
       } catch (emailError) {
-        console.error("Email sending failed (non-blocking):", emailError.message);
+        console.error("❌ Email sending failed:", emailError.message);
       }
     };
 
@@ -273,46 +294,56 @@ router.post("/request-otp", async (req, res) => {
     // Try to send OTP to email (non-blocking, fire-and-forget)
     const sendEmailAsync = async () => {
       try {
-        console.log("📧 Starting email send process...");
-        console.log("EMAIL_USER:", process.env.EMAIL_USER ? "configured" : "NOT CONFIGURED");
-        console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "configured" : "NOT CONFIGURED");
+        // Use Resend API if configured (works on Render without SMTP blocking)
+        if (process.env.RESEND_API_KEY) {
+          console.log("📧 Using Resend API for email sending");
+          const resend = require('resend');
+          const resendClient = new resend.Resend(process.env.RESEND_API_KEY);
 
-        let transporter;
-        
-        // Use custom SMTP if configured, otherwise Gmail
-        if (process.env.EMAIL_HOST) {
-          transporter = require("nodemailer").createTransport({
-            host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT || 587,
-            secure: process.env.EMAIL_PORT == 465,
-            auth: {
-              user: process.env.EMAIL_USER,
-              pass: process.env.EMAIL_PASS,
-            },
+          await resendClient.emails.send({
+            from: 'MedTrack <onboarding@resend.dev>',
+            to: trimmedEmail,
+            subject: 'Your Registration OTP',
+            html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
           });
+          console.log(`✅ Registration email sent via Resend to ${trimmedEmail}`);
         } else {
-          transporter = require("nodemailer").createTransport({
-            host: "smtp.gmail.com",
-            port: 587,
-            secure: false,
-            auth: {
-              user: process.env.EMAIL_USER,
-              pass: process.env.EMAIL_PASS,
-            },
+          // Fallback to SMTP (for local development)
+          console.log("📧 Using SMTP for email sending");
+          let transporter;
+
+          if (process.env.EMAIL_HOST) {
+            transporter = require("nodemailer").createTransport({
+              host: process.env.EMAIL_HOST,
+              port: process.env.EMAIL_PORT || 587,
+              secure: process.env.EMAIL_PORT == 465,
+              auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+              },
+            });
+          } else {
+            transporter = require("nodemailer").createTransport({
+              host: "smtp.gmail.com",
+              port: 587,
+              secure: false,
+              auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+              },
+            });
+          }
+
+          await transporter.sendMail({
+            from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
+            to: trimmedEmail,
+            subject: "Your Registration OTP",
+            html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
           });
+          console.log(`✅ Registration email sent via SMTP to ${trimmedEmail}`);
         }
-        
-        await transporter.sendMail({
-          from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
-          to: trimmedEmail,
-          subject: "Your Registration OTP",
-          html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
-        });
-        
-        console.log(`✅ Registration email sent to ${trimmedEmail}`);
       } catch (emailError) {
         console.error("❌ Email sending failed:", emailError.message);
-        console.error("Full error:", emailError);
       }
     };
 
