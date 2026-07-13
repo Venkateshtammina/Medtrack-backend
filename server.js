@@ -8,13 +8,21 @@ const inventoryLogRoutes = require("./routes/inventoryLogRoutes");
 
 const app = express();
 
-// Enable CORS for all routes
+// Enable dynamic CORS matching for all Vercel deployments and localhost
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    process.env.FRONTEND_URL
-  ].filter(Boolean),
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    if (!origin) return callback(null, true);
+    
+    const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+    const isVercelDomain = origin.endsWith('.vercel.app'); // Dynamically supports all your frontend preview & production URLs
+    
+    if (isLocalhost || isVercelDomain) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS Policy'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -28,7 +36,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serverless Database Middleware 
-// (Ensures the database is connected *before* processing any incoming route)
+// (Guarantees the database connection is active before running any route logic)
 app.use(async (req, res, next) => {
   try {
     if (connection.readyState !== 1) {
@@ -77,11 +85,6 @@ const startServer = async () => {
     
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
-      console.log(`Allowed origins: ${[
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        process.env.FRONTEND_URL
-      ].filter(Boolean).join(', ')}`);
     });
 
     // Handle process termination
@@ -102,10 +105,10 @@ const startServer = async () => {
   }
 };
 
-// This block remains for local testing (npm start runs fine locally)
+// Keeps local execution running normally (npm start)
 if (require.main === module) {
   startServer();
 }
 
-// Vercel expects the app instance exported directly to process serverless invocations
+// Export the application instance for Vercel Serverless handling
 module.exports = app;
