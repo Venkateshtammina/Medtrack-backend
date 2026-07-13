@@ -27,6 +27,19 @@ app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serverless Database Middleware 
+// (Ensures the database is connected *before* processing any incoming route)
+app.use(async (req, res, next) => {
+  try {
+    if (connection.readyState !== 1) {
+      await connectDB();
+    }
+    next();
+  } catch (err) {
+    next(new Error("Database connection failed: " + err.message));
+  }
+});
+
 // Simple request logger
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
@@ -89,9 +102,10 @@ const startServer = async () => {
   }
 };
 
-// Only start the server if this file is run directly
+// This block remains for local testing (npm start runs fine locally)
 if (require.main === module) {
   startServer();
 }
 
+// Vercel expects the app instance exported directly to process serverless invocations
 module.exports = app;
