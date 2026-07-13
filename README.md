@@ -351,12 +351,6 @@ MongoDB Atlas
 
 ---
 
-# License
-
-This project is intended for educational and production deployment purposes. Customize and extend it according to your application's requirements.
-
----
-
 ## Author
 
 **MedTrack Backend API**
