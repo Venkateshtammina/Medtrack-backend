@@ -7,6 +7,17 @@ const nodemailer = require("nodemailer");
 const User = require("../models/User");
 require("dotenv").config();
 
+// Configure the Gmail SMTP Transporter
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // true for 465, false for other ports like 587
+  auth: {
+    user: process.env.EMAIL_USER, // Your Gmail address
+    pass: process.env.EMAIL_PASS, // Your Gmail App Password
+  },
+});
+
 // Register with OTP verification
 router.post("/register", async (req, res) => {
   const { name, email, password, otp } = req.body;
@@ -74,7 +85,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Forgot Password - Send OTP
+// Forgot Password - Send OTP via Gmail SMTP
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
 
@@ -92,75 +103,28 @@ router.post("/forgot-password", async (req, res) => {
     // Log OTP to console for testing
     console.log(`\n🔐 OTP for ${trimmedEmail}: ${otp}`);
 
-    // Try to send email (non-blocking, fire-and-forget)
+    // Non-blocking, fire-and-forget email sending
     const sendEmailAsync = async () => {
       try {
-        // Use Resend API if configured (works on Render without SMTP blocking)
-        if (process.env.RESEND_API_KEY) {
-          console.log("📧 Using Resend API for email sending");
-          const resend = require('resend');
-          const resendClient = new resend.Resend(process.env.RESEND_API_KEY);
+        const mailOptions = {
+          from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
+          to: trimmedEmail,
+          subject: "Your Password Reset OTP",
+          html: `
+            <p>Hi ${user.name},</p>
+            <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
+            <p>This OTP will expire in 10 minutes.</p>
+            <p>Regards,<br/>MedTrack Team</p>
+          `,
+        };
 
-          await resendClient.emails.send({
-            from: 'MedTrack <onboarding@resend.dev>',
-            to: trimmedEmail,
-            subject: 'Your Password Reset OTP',
-            html: `
-              <p>Hi ${user.name},</p>
-              <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
-              <p>This OTP will expire in 10 minutes.</p>
-              <p>Regards,<br/>MedTrack Team</p>
-            `
-          });
-          console.log(`✅ Email sent via Resend to ${trimmedEmail}`);
-        } else {
-          // Fallback to SMTP (for local development)
-          console.log("📧 Using SMTP for email sending");
-          let transporter;
-
-          if (process.env.EMAIL_HOST) {
-            transporter = require("nodemailer").createTransport({
-              host: process.env.EMAIL_HOST,
-              port: process.env.EMAIL_PORT || 587,
-              secure: process.env.EMAIL_PORT == 465,
-              auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-              },
-            });
-          } else {
-            transporter = require("nodemailer").createTransport({
-              host: "smtp.gmail.com",
-              port: 587,
-              secure: false,
-              auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-              },
-            });
-          }
-
-          const mailOptions = {
-            from: `"MedTrack Support" <venkatesht1243@gmail.com>`,
-            to: trimmedEmail,
-            subject: "Your Password Reset OTP",
-            html: `
-              <p>Hi ${user.name},</p>
-              <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
-              <p>This OTP will expire in 10 minutes.</p>
-              <p>Regards,<br/>MedTrack Team</p>
-            `,
-          };
-
-          await transporter.sendMail(mailOptions);
-          console.log(`✅ Email sent via SMTP to ${trimmedEmail}`);
-        }
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Email sent via Gmail SMTP to ${trimmedEmail}`);
       } catch (emailError) {
         console.error("❌ Email sending failed:", emailError.message);
       }
     };
 
-    // Fire email sending without waiting
     sendEmailAsync();
 
     res.json({ message: "OTP sent to your email." });
@@ -220,7 +184,6 @@ router.post("/reset-password", async (req, res) => {
   const { token, email, password } = req.body;
 
   try {
-    // Verify the token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const trimmedEmail = email.toLowerCase().trim();
     const user = await User.findOne({ email: trimmedEmail });
@@ -250,7 +213,6 @@ router.post("/reset-password", async (req, res) => {
 // Get current user info (requires authentication)
 router.get("/me", async (req, res) => {
   try {
-    // Get token from header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ message: "No token provided" });
@@ -265,7 +227,7 @@ router.get("/me", async (req, res) => {
   }
 });
 
-// Request OTP for registration
+// Request OTP for registration via Gmail SMTP
 router.post("/request-otp", async (req, res) => {
   const { email, name } = req.body;
   try {
@@ -277,7 +239,7 @@ router.post("/request-otp", async (req, res) => {
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Store OTP in memory with registration data (no database save)
+    // Store OTP in memory with registration data
     if (!global.pendingRegistrations) {
       global.pendingRegistrations = new Map();
     }
@@ -291,63 +253,23 @@ router.post("/request-otp", async (req, res) => {
     // Log OTP to console for testing
     console.log(`\n🔐 Registration OTP for ${trimmedEmail}: ${otp}`);
 
-    // Try to send OTP to email (non-blocking, fire-and-forget)
+    // Non-blocking, fire-and-forget email sending
     const sendEmailAsync = async () => {
       try {
-        // Use Resend API if configured (works on Render without SMTP blocking)
-        if (process.env.RESEND_API_KEY) {
-          console.log("📧 Using Resend API for email sending");
-          const resend = require('resend');
-          const resendClient = new resend.Resend(process.env.RESEND_API_KEY);
+        const mailOptions = {
+          from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
+          to: trimmedEmail,
+          subject: "Your Registration OTP",
+          html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
+        };
 
-          await resendClient.emails.send({
-            from: 'MedTrack <onboarding@resend.dev>',
-            to: trimmedEmail,
-            subject: 'Your Registration OTP',
-            html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
-          });
-          console.log(`✅ Registration email sent via Resend to ${trimmedEmail}`);
-        } else {
-          // Fallback to SMTP (for local development)
-          console.log("📧 Using SMTP for email sending");
-          let transporter;
-
-          if (process.env.EMAIL_HOST) {
-            transporter = require("nodemailer").createTransport({
-              host: process.env.EMAIL_HOST,
-              port: process.env.EMAIL_PORT || 587,
-              secure: process.env.EMAIL_PORT == 465,
-              auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-              },
-            });
-          } else {
-            transporter = require("nodemailer").createTransport({
-              host: "smtp.gmail.com",
-              port: 587,
-              secure: false,
-              auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-              },
-            });
-          }
-
-          await transporter.sendMail({
-            from: `"MedTrack Support" <${process.env.EMAIL_USER}>`,
-            to: trimmedEmail,
-            subject: "Your Registration OTP",
-            html: `<p>Your OTP for MedTrack registration is: <strong>${otp}</strong></p><p>This OTP will expire in 10 minutes.</p>`
-          });
-          console.log(`✅ Registration email sent via SMTP to ${trimmedEmail}`);
-        }
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Registration email sent via Gmail SMTP to ${trimmedEmail}`);
       } catch (emailError) {
         console.error("❌ Email sending failed:", emailError.message);
       }
     };
 
-    // Fire email sending without waiting
     sendEmailAsync();
 
     res.json({ message: "OTP sent to your email." });
