@@ -14,22 +14,30 @@ router.post("/register", async (req, res) => {
     const trimmedEmail = email.toLowerCase().trim();
 
     // Check if user already exists
-    const userExists = await User.findOne({ email: trimmedEmail, password: { $ne: null } });
+    const userExists = await User.findOne({ email: trimmedEmail });
     if (userExists) return res.status(400).json({ message: "User already exists" });
 
-    // Find temp user with OTP
-    const tempUser = await User.findOne({ email: trimmedEmail, password: null });
-    if (!tempUser || tempUser.resetOtp !== otp || Date.now() > tempUser.resetOtpExpiry) {
+    // Verify OTP from in-memory storage
+    if (!global.pendingRegistrations) {
+      return res.status(400).json({ message: "No pending registration. Please request OTP first." });
+    }
+
+    const pendingReg = global.pendingRegistrations.get(trimmedEmail);
+    if (!pendingReg || pendingReg.otp !== otp || Date.now() > pendingReg.expiry) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
     // Create the real user
     const hashedPassword = await bcrypt.hash(password, 10);
-    tempUser.name = name;
-    tempUser.password = hashedPassword;
-    tempUser.resetOtp = undefined;
-    tempUser.resetOtpExpiry = undefined;
-    await tempUser.save();
+    const newUser = new User({
+      name: name || pendingReg.name,
+      email: trimmedEmail,
+      password: hashedPassword
+    });
+    await newUser.save();
+
+    // Remove from pending registrations
+    global.pendingRegistrations.delete(trimmedEmail);
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
@@ -242,20 +250,22 @@ router.post("/request-otp", async (req, res) => {
   try {
     const trimmedEmail = email.toLowerCase().trim();
     // Check if user already exists
-    const userExists = await User.findOne({ email: trimmedEmail, password: { $ne: null } });
+    const userExists = await User.findOne({ email: trimmedEmail });
     if (userExists) return res.status(400).json({ message: "User already exists" });
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Store OTP in a temporary user document (or upsert)
-    let tempUser = await User.findOne({ email: trimmedEmail, password: null });
-    if (!tempUser) {
-      tempUser = new User({ name: name || "", email: trimmedEmail, password: null });
+    // Store OTP in memory with registration data (no database save)
+    if (!global.pendingRegistrations) {
+      global.pendingRegistrations = new Map();
     }
-    tempUser.resetOtp = otp;
-    tempUser.resetOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-    await tempUser.save();
+    global.pendingRegistrations.set(trimmedEmail, {
+      otp,
+      name: name || "",
+      email: trimmedEmail,
+      expiry: Date.now() + 10 * 60 * 1000 // 10 minutes
+    });
 
     // Log OTP to console for testing
     console.log(`\n🔐 Registration OTP for ${trimmedEmail}: ${otp}`);
