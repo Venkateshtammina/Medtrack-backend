@@ -7,12 +7,18 @@ const auth = require("../middleware/auth");
 // Create a new medicine
 router.post("/", auth, async (req, res) => {
   try {
+    console.log('POST /api/medicines - Request body:', req.body);
+    console.log('POST /api/medicines - User:', req.user);
+    
     const medicine = new Medicine({
       ...req.body,
       user: req.user._id
     });
     
+    console.log('POST /api/medicines - Medicine object:', medicine);
+    
     await medicine.save();
+    console.log('POST /api/medicines - Medicine saved successfully');
 
     // Log the addition
     const log = new InventoryLog({
@@ -23,10 +29,14 @@ router.post("/", auth, async (req, res) => {
       user: req.user._id
     });
     await log.save();
+    console.log('POST /api/medicines - Log saved successfully');
 
     res.status(201).json(medicine);
+    console.log('POST /api/medicines - Response sent');
   } catch (err) {
     console.error('Error adding medicine:', err);
+    console.error('Error details:', err.message);
+    console.error('Error stack:', err.stack);
     res.status(500).json({ error: err.message || "Failed to add medicine" });
   }
 });
