@@ -1,17 +1,5 @@
-const cron = require("node-cron");
-const sendExpiryAlerts = require("./sendExpiryEmails"); // <-- renamed function file
+// Kept for compatibility with existing imports. Vercel Cron is configured in
+// vercel.json and calls the secured API job once per day.
+const { sendExpiryAlerts } = require("../services/expiryAlerts");
 
-const alertScheduler = () => {
-  console.log("⏰ Starting alert scheduler...");
-
-  cron.schedule("0 10 * * *", async () => {
-    console.log("🔔 Running scheduled expiry alert job...");
-    try {
-      await sendExpiryAlerts();
-    } catch (err) {
-      console.error("❌ Error in scheduled job:", err);
-    }
-  });
-};
-
-module.exports = alertScheduler;
+module.exports = sendExpiryAlerts;

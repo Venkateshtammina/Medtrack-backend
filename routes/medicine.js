@@ -44,7 +44,12 @@ router.post("/", auth, async (req, res) => {
 // Get all medicines
 router.get("/", auth, async (req, res) => {
   try {
-    const query = { user: req.user._id };
+    const query = {
+      user: req.user._id,
+      // `$ne: null` also matches legacy records where the field is missing.
+      // Only a stored archive timestamp identifies an archived medicine.
+      archivedAt: req.query.archived === "true" ? { $type: "date" } : null,
+    };
     const medicines = await Medicine.find(query).sort({ expiryDate: 1 });
     res.json(medicines);
   } catch (err) {
@@ -56,7 +61,7 @@ router.get("/", auth, async (req, res) => {
 // Get a single medicine by ID
 router.get("/:id", auth, async (req, res) => {
   try {
-    const medicine = await Medicine.findOne({ _id: req.params.id, user: req.user._id });
+    const medicine = await Medicine.findOne({ _id: req.params.id, user: req.user._id, archivedAt: null });
     if (!medicine) {
       return res.status(404).json({ error: "Medicine not found" });
     }
@@ -78,7 +83,7 @@ router.patch("/:id", auth, async (req, res) => {
   }
 
   try {
-    const medicine = await Medicine.findOne({ _id: req.params.id, user: req.user._id });
+    const medicine = await Medicine.findOne({ _id: req.params.id, user: req.user._id, archivedAt: null });
     
     if (!medicine) {
       return res.status(404).json({ error: "Medicine not found" });
@@ -110,7 +115,7 @@ router.patch("/:id", auth, async (req, res) => {
 // Delete a medicine
 router.delete("/:id", auth, async (req, res) => {
   try {
-    const medicine = await Medicine.findOneAndDelete({ _id: req.params.id, user: req.user._id });
+    const medicine = await Medicine.findOneAndDelete({ _id: req.params.id, user: req.user._id, archivedAt: null });
     
     if (!medicine) {
       return res.status(404).json({ error: "Medicine not found" });

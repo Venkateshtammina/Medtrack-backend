@@ -33,6 +33,18 @@ const MedicineSchema = new mongoose.Schema({
   lastAlertSent: {
     type: Date,
     default: null
+  },
+  expiryAlertSentFor: {
+    type: Date,
+    default: null
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  archiveReason: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

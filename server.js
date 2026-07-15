@@ -5,6 +5,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/auth");
 const medicineRoutes = require("./routes/medicine");
 const inventoryLogRoutes = require("./routes/inventoryLogRoutes");
+const jobRoutes = require("./routes/jobs");
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use((req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/medicines", medicineRoutes);
 app.use("/api/inventory-logs", inventoryLogRoutes);
+app.use("/api/jobs", jobRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

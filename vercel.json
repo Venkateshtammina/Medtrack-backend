@@ -20,5 +20,11 @@
       "status": 200,
       "dest": "server.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/jobs/expiry-alerts",
+      "schedule": "0 4 * * *"
+    }
   ]
 }
