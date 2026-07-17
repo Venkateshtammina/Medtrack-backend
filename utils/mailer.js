@@ -3,21 +3,10 @@ const nodemailer = require("nodemailer");
 require("dotenv").config();
 
 let transporter;
-let resendClient;
 
 function getTransporter() {
-  // Use Resend API if configured (works on Render without SMTP blocking)
-  if (process.env.RESEND_API_KEY) {
-    if (!resendClient) {
-      const resend = require('resend');
-      resendClient = new resend.Resend(process.env.RESEND_API_KEY);
-    }
-    return { type: 'resend', client: resendClient };
-  }
-
-  // Fallback to SMTP (for local development)
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error("EMAIL_USER and EMAIL_PASS must be configured when RESEND_API_KEY is not set");
+    throw new Error("EMAIL_USER and EMAIL_PASS must be configured");
   }
 
   if (!transporter) {
@@ -44,11 +33,10 @@ function getTransporter() {
     }
   }
 
-  return { type: 'smtp', client: transporter };
+  return transporter;
 }
 
 const DEFAULT_FROM_EMAIL = "venkatesht1243@gmail.com";
-const RESEND_FROM_EMAIL = "MedTrack <onboarding@resend.dev>";
 
 function getFromAddress() {
   const fromEmail =
@@ -96,27 +84,12 @@ function getEmailWrapper(contentHtml) {
 }
 
 async function sendEmail({ to, subject, html }) {
-  const transport = getTransporter();
-  
-  if (transport.type === 'resend') {
-    // Use Resend API
-    await transport.client.emails.send({
-      from: RESEND_FROM_EMAIL,
-      to,
-      subject,
-      html: getEmailWrapper(html),
-    });
-    console.log(`✅ Email sent via Resend to ${to}`);
-  } else {
-    // Use SMTP
-    await transport.client.sendMail({
-      from: getFromAddress(),
-      to,
-      subject,
-      html: getEmailWrapper(html),
-    });
-    console.log(`✅ Email sent via SMTP to ${to}`);
-  }
+  await getTransporter().sendMail({
+    from: getFromAddress(),
+    to,
+    subject,
+    html: getEmailWrapper(html), // Injects core layout styles around template text
+  });
 }
 
 async function sendOtpEmail({ to, name, otp, purpose }) {
@@ -216,27 +189,14 @@ const sendExpiryNotification = async (to, medicineName, expiryDate) => {
   `;
 
   try {
-    const transport = getTransporter();
-    
-    if (transport.type === 'resend') {
-      // Use Resend API
-      await transport.client.emails.send({
-        from: RESEND_FROM_EMAIL,
-        to,
-        subject,
-        html: getEmailWrapper(innerBodyHtml)
-      });
-      console.log(`✅ Automated Expiry Notification sent via Resend to ${to} for SKU item [${medicineName}]`);
-    } else {
-      // Use SMTP
-      await transport.client.sendMail({
-        from: getFromAddress(),
-        to,
-        subject,
-        html: getEmailWrapper(innerBodyHtml)
-      });
-      console.log(`✅ Automated Expiry Notification sent via SMTP to ${to} for SKU item [${medicineName}]`);
-    }
+    // Intercepts structural text and routes via common framework layout
+    await getTransporter().sendMail({
+      from: getFromAddress(),
+      to,
+      subject,
+      html: getEmailWrapper(innerBodyHtml)
+    });
+    console.log(`✅ Automated Expiry Notification successfully transmitted to ${to} for SKU item [${medicineName}]`);
   } catch (err) {
     console.error("❌ Critical Expiry Notification execution failure:", err.message);
     throw err;
