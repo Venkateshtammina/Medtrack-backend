@@ -24,7 +24,7 @@
   "crons": [
     {
       "path": "/api/jobs/expiry-alerts",
-      "schedule": "15 8 * * *"
+      "schedule": "16 8 * * *"
     }
   ]
 }
