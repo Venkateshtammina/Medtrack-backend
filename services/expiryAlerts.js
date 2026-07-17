@@ -36,7 +36,7 @@ async function sendExpiryAlerts() {
     archivedAt: null,
   }).sort({ expiryDate: 1 });
   const medicines = await Medicine.find({
-    expiryDate: { $gte: tomorrow, $lt: alertEnd },
+    expiryDate: { $gte: today, $lt: alertEnd },
     archivedAt: null,
   }).sort({ expiryDate: 1 });
 
